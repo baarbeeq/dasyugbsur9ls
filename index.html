@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Личные сообщения</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: #f0f2f5; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        
+        /* Авторизация */
+        #auth-section { display: flex; flex-direction: column; align-items: center; margin-top: 100px; }
+        .google-btn { background: #4285F4; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-size: 16px; cursor: pointer; transition: 0.3s; }
+        .google-btn:hover { background: #357ae8; }
+
+        /* Главный экран */
+        #app-section { display: none; width: 100%; max-width: 800px; }
+        
+        /* Шапка профиля */
+        .header { background: white; padding: 15px 20px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        .user-info { display: flex; align-items: center; gap: 15px; }
+        .avatar { width: 40px; height: 40px; border-radius: 50%; background: #4caf50; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; }
+        .logout-btn { color: #d32f2f; cursor: pointer; font-size: 14px; background: none; border: none; font-weight: bold; }
+
+        /* Основной контейнер чата */
+        .main-container { display: flex; background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); overflow: hidden; min-height: 500px; }
+        
+        /* Список пользователей */
+        .sidebar { width: 30%; border-right: 1px solid #eaeaea; padding: 20px; background: #fafafa; }
+        .sidebar h4 { margin-bottom: 15px; font-size: 14px; color: #555; }
+        .user-item { display: flex; flex-direction: column; align-items: center; cursor: pointer; padding: 10px; border-radius: 8px; transition: 0.2s; }
+        .user-item:hover, .user-item.active { background: #e3f2fd; }
+        .user-item .avatar { background: #009688; margin-bottom: 5px; }
+        .user-item span { font-size: 14px; }
+
+        /* Область чата */
+        .chat-area { width: 70%; display: flex; flex-direction: column; }
+        .chat-header { padding: 15px 20px; border-bottom: 1px solid #eaeaea; font-weight: bold; }
+        
+        .messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; background: #f9f9fa; }
+        .message { max-width: 70%; padding: 10px 15px; border-radius: 20px; font-size: 14px; }
+        .message.received { background: #e4e6eb; align-self: flex-start; border-bottom-left-radius: 4px; }
+        .message.sent { background: #007bff; color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+        
+        .input-area { padding: 15px; border-top: 1px solid #eaeaea; display: flex; gap: 10px; background: white; }
+        .input-area input { flex: 1; padding: 12px 15px; border: 1px solid #ddd; border-radius: 20px; outline: none; }
+        .input-area button { background: #007bff; color: white; border: none; padding: 0 20px; border-radius: 20px; cursor: pointer; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div id="auth-section">
+        <h2>Добро пожаловать</h2>
+        <br>
+        <button class="google-btn" id="loginBtn">Войти через Google</button>
+    </div>
+
+    <div id="app-section">
+        <div class="header">
+            <div class="user-info">
+                <div class="avatar" id="myAvatar">?</div>
+                <div style="display: flex; flex-direction: column;">
+                    <strong id="myName">Загрузка...</strong>
+                    <button class="logout-btn" id="logoutBtn">Выйти</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-container">
+            <div class="sidebar">
+                <h4>Выберите собеседника:</h4>
+                <div id="usersList">
+                    </div>
+            </div>
+
+            <div class="chat-area">
+                <div class="chat-header" id="chatHeader">Чат...</div>
+                <div class="messages" id="messagesContainer">
+                    </div>
+                <div class="input-area">
+                    <input type="text" id="msgInput" placeholder="Ваше сообщение..." disabled>
+                    <button id="sendBtn" disabled>➤</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, addDoc, query, onSnapshot, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+
+        // ТВОЙ КОНФИГУРАЦИОННЫЙ ОБЪЕКТ FIREBASE
+        const firebaseConfig = {
+            apiKey: "AIzaSyBD8ksqaZhKvx5X5yg7uNbuCmwkM9i1vug",
+            authDomain: "registerasddwqwqrf.firebaseapp.com",
+            projectId: "registerasddwqwqrf",
+            storageBucket: "registerasddwqwqrf.firebasestorage.app",
+            messagingSenderId: "96075486903",
+            appId: "1:96075486903:web:e15506574d299351f19f32",
+            measurementId: "G-L1ESE7TD5D"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const provider = new GoogleAuthProvider();
+
+        let currentUser = null;
+        let selectedUserId = null;
+        let unsubscribeMessages = null;
+
+        // Элементы UI
+        const authSection = document.getElementById('auth-section');
+        const appSection = document.getElementById('app-section');
+        const myName = document.getElementById('myName');
+        const myAvatar = document.getElementById('myAvatar');
+        const usersList = document.getElementById('usersList');
+        const messagesContainer = document.getElementById('messagesContainer');
+        const msgInput = document.getElementById('msgInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const chatHeader = document.getElementById('chatHeader');
+
+        // 1. АВТОРИЗАЦИЯ
+        document.getElementById('loginBtn').onclick = () => signInWithPopup(auth, provider);
+        document.getElementById('logoutBtn').onclick = () => signOut(auth);
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                currentUser = user;
+                authSection.style.display = 'none';
+                appSection.style.display = 'block';
+                
+                myName.textContent = user.displayName;
+                myAvatar.textContent = user.displayName.charAt(0).toUpperCase();
+
+                // Сохраняем пользователя в базу, чтобы другие могли его найти
+                await setDoc(doc(db, "users", user.uid), {
+                    uid: user.uid,
+                    name: user.displayName,
+                    email: user.email
+                });
+
+                loadUsers();
+            } else {
+                currentUser = null;
+                authSection.style.display = 'flex';
+                appSection.style.display = 'none';
+            }
+        });
+
+        // 2. ЗАГРУЗКА СПИСКА ПОЛЬЗОВАТЕЛЕЙ
+        function loadUsers() {
+            onSnapshot(collection(db, "users"), (snapshot) => {
+                usersList.innerHTML = "";
+                snapshot.forEach((doc) => {
+                    const user = doc.data();
+                    if (user.uid !== currentUser.uid) { // Не показываем себя
+                        const div = document.createElement('div');
+                        div.className = 'user-item';
+                        div.innerHTML = `
+                            <div class="avatar">${user.name.charAt(0).toUpperCase()}</div>
+                            <span>${user.name.split(' ')[0]}</span>
+                        `;
+                        div.onclick = () => selectUser(user.uid, user.name);
+                        usersList.appendChild(div);
+                    }
+                });
+            });
+        }
+
+        // 3. ВЫБОР СОБЕСЕДНИКА И ГЕНЕРАЦИЯ ID ЧАТА
+        function selectUser(uid, name) {
+            selectedUserId = uid;
+            chatHeader.textContent = `Чат с: ${name}`;
+            msgInput.disabled = false;
+            sendBtn.disabled = false;
+            
+            // Уникальный ID комнаты для двух пользователей
+            const chatId = currentUser.uid < uid ? `${currentUser.uid}_${uid}` : `${uid}_${currentUser.uid}`;
+            
+            loadMessages(chatId);
+        }
+
+        // 4. ЗАГРУЗКА И ОТОБРАЖЕНИЕ СООБЩЕНИЙ
+        function loadMessages(chatId) {
+            if (unsubscribeMessages) unsubscribeMessages(); // Отписываемся от старого чата
+            
+            const q = query(collection(db, "messages", chatId, "chat"), orderBy("timestamp", "asc"));
+            
+            unsubscribeMessages = onSnapshot(q, (snapshot) => {
+                messagesContainer.innerHTML = "";
+                snapshot.forEach((doc) => {
+                    const msg = doc.data();
+                    const div = document.createElement('div');
+                    div.className = `message ${msg.senderId === currentUser.uid ? 'sent' : 'received'}`;
+                    div.textContent = msg.text;
+                    messagesContainer.appendChild(div);
+                });
+                // Прокрутка вниз
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            });
+        }
+
+        // 5. ОТПРАВКА СООБЩЕНИЯ
+        sendBtn.onclick = async () => {
+            const text = msgInput.value.trim();
+            if (!text || !selectedUserId) return;
+
+            const chatId = currentUser.uid < selectedUserId ? `${currentUser.uid}_${selectedUserId}` : `${selectedUserId}_${currentUser.uid}`;
+            msgInput.value = "";
+
+            await addDoc(collection(db, "messages", chatId, "chat"), {
+                senderId: currentUser.uid,
+                text: text,
+                timestamp: serverTimestamp()
+            });
+        };
+
+        // Отправка по Enter
+        msgInput.addEventListener("keypress", function(event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                sendBtn.click();
+            }
+        });
+    </script>
+</body>
+</html>
